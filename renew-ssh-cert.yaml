@@ -1,0 +1,41 @@
+- hosts: localhost
+  tasks:
+    - name: Check current cert's validity
+      community.crypto.openssh_cert:
+        type: user
+        principals: pasztor
+        public_key: /home/pasztor/.ssh/id_rsa.pub
+        path: /home/pasztor/.ssh/id_rsa-cert.pub
+        valid_at: +0s
+        ignore_timestamps: yes
+        valid_from: +0s
+        valid_to: +0s
+        signing_key: blah
+      check_mode: true
+      register: certcheck
+
+    - name: Renew cert if needed
+      hashivault_write:
+        authtype: userpass
+        username: pasztor
+        url: http://localhost:8200
+        mount_point: ssh
+        secret: sign/risa
+        data:
+          public_key: "{{ lookup('ansible.builtin.file', '/home/pasztor/.ssh/id_rsa.pub') }}"
+          valid_principals: pasztor
+      register: renewed_cert
+      when: certcheck.changed
+
+    - name: debug renewed cert
+      debug:
+        var: renewed_cert
+      when: renewed_cert is defined
+
+    - name: Write renewed cert to file
+      ansible.builtin.copy:
+        content: "{{ renewed_cert.data.data.signed_key }}"
+        dest: /home/pasztor/.ssh/id_rsa-cert.pub
+      when: renewed_cert.data is defined
+        
+
